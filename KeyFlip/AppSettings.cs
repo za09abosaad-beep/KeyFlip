@@ -54,6 +54,7 @@ public sealed class AppSettings
     public int Modifiers { get; set; } = (int)(HotkeyModifiers.Control | HotkeyModifiers.Alt);
     public int Key { get; set; } = (int)Keys.Space;
     public bool Enabled { get; set; } = true;
+    public bool SwitchLayout { get; set; } = true;
 
     [JsonIgnore] public HotkeyModifiers Mods => (HotkeyModifiers)Modifiers;
     [JsonIgnore] public Keys KeyCode => (Keys)Key;

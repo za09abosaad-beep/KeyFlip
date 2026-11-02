@@ -7,6 +7,16 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <Version>1.0.0</Version>
+    <Authors>Dr. Abdelrahman</Authors>
+    <Company>Dr. Abdelrahman</Company>
+    <Product>KeyFlip</Product>
+    <Description>Fixes text typed with the wrong keyboard layout (English/Arabic).</Description>
+    <Copyright>Copyright (c) 2026 Dr. Abdelrahman</Copyright>
   </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Layouts\*.json" LogicalName="KeyFlip.Layouts.%(Filename)%(Extension)" />
+  </ItemGroup>
 
 </Project>

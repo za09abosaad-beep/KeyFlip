@@ -28,11 +28,12 @@ internal sealed class TrayContext : ApplicationContext
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _enableItem;
     private readonly HotkeyManager _hotkey = new();
-    private readonly SelectionConverter _converter = new();
+    private readonly SelectionConverter _converter;
     private bool _settingsOpen;
 
     public TrayContext(bool startedAtSignIn)
     {
+        _converter = new SelectionConverter { SwitchLayout = _settings.SwitchLayout };
         try { StartupManager.RefreshEntry(); } catch { /* keep the old entry */ }
 
         _enableItem = new ToolStripMenuItem("Enabled") { Checked = _settings.Enabled, CheckOnClick = true };
@@ -123,7 +124,7 @@ internal sealed class TrayContext : ApplicationContext
         try
         {
             bool startupWasOn = StartupManager.IsEnabled();
-            using var form = new SettingsForm(_settings.Mods, _settings.KeyCode, startupWasOn);
+            using var form = new SettingsForm(_settings.Mods, _settings.KeyCode, startupWasOn, _settings.SwitchLayout);
             if (form.ShowDialog() != DialogResult.OK) return;
 
             // 1. Start with Windows (only changes when the user ticks/unticks the box).
@@ -136,7 +137,15 @@ internal sealed class TrayContext : ApplicationContext
                 }
             }
 
-            // 2. Shortcut.
+            // 2. Keyboard layout switching.
+            if (form.SwitchLayout != _settings.SwitchLayout)
+            {
+                _settings.SwitchLayout = form.SwitchLayout;
+                _converter.SwitchLayout = form.SwitchLayout;
+                _settings.Save();
+            }
+
+            // 3. Shortcut.
             bool changed = form.SelectedModifiers != _settings.Mods || form.SelectedKey != _settings.KeyCode;
             if (changed)
             {

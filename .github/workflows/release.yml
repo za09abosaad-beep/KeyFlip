@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # create the GitHub Release
+  actions: read     # SignPath reads the uploaded artifact
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      # Secrets cannot be used in step "if:" directly, so compute flags here.
+      # The values are only compared, never printed.
+      HAS_SIGNPATH: ${{ secrets.SIGNPATH_API_TOKEN != '' && secrets.SIGNPATH_ORGANIZATION_ID != '' && vars.SIGNPATH_PROJECT_SLUG != '' && vars.SIGNPATH_SIGNING_POLICY_SLUG != '' }}
+      HAS_PFX: ${{ secrets.SIGNING_CERT_PFX_BASE64 != '' && secrets.SIGNING_CERT_PASSWORD != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test
+        run: dotnet test KeyFlip.Tests -c Release
+
+      - name: Get version from tag
+        id: ver
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        working-directory: KeyFlip
+        run: >
+          dotnet publish -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:Version=${{ steps.ver.outputs.version }}
+          -o ..\publish
+
+      # Option A: SignPath Foundation (preferred when configured)
+      - name: Upload unsigned exe (for SignPath)
+        if: env.HAS_SIGNPATH == 'true'
+        id: upload-unsigned
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-exe
+          path: publish/KeyFlip.exe
+
+      - name: Sign with SignPath
+        if: env.HAS_SIGNPATH == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Use SignPath-signed exe
+        if: env.HAS_SIGNPATH == 'true'
+        shell: pwsh
+        run: Copy-Item signed/KeyFlip.exe publish/KeyFlip.exe -Force
+
+      # Option B: own certificate (only if SignPath is not configured)
+      - name: Sign with own certificate
+        if: env.HAS_SIGNPATH != 'true' && env.HAS_PFX == 'true'
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.SIGNING_CERT_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'cert.pfx'
+          try {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+              Sort-Object FullName -Descending | Select-Object -First 1
+            if (-not $signtool) { throw 'signtool.exe not found' }
+            & $signtool.FullName sign /f $pfx /p $env:PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 publish\KeyFlip.exe
+            if ($LASTEXITCODE -ne 0) { throw "signtool sign failed ($LASTEXITCODE)" }
+            & $signtool.FullName verify /pa publish\KeyFlip.exe
+            if ($LASTEXITCODE -ne 0) { throw "signtool verify failed ($LASTEXITCODE)" }
+          } finally {
+            Remove-Item $pfx -Force -ErrorAction SilentlyContinue
+          }
+
+      # Option C: nothing configured
+      - name: Warn about unsigned build
+        if: env.HAS_SIGNPATH != 'true' && env.HAS_PFX != 'true'
+        shell: bash
+        run: echo "::warning::No signing configured (SignPath or certificate secrets missing). Releasing an UNSIGNED exe. See docs/RELEASING.md."
+
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash publish\KeyFlip.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash *KeyFlip.exe" | Set-Content -Encoding ascii publish\KeyFlip.exe.sha256
+          Get-Content publish\KeyFlip.exe.sha256
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME"
+          publish/KeyFlip.exe publish/KeyFlip.exe.sha256
+          --title "$GITHUB_REF_NAME" --generate-notes --verify-tag

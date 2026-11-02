@@ -14,6 +14,9 @@ public sealed class SelectionConverter
     private bool _busy;
     private (string Original, string Converted)? _last;
 
+    /// <summary>Switch the keyboard layout to the language of the pasted text after converting.</summary>
+    public bool SwitchLayout { get; set; } = true;
+
     /// <param name="hotkeyKey">The non-modifier key of the shortcut (for example Space).</param>
     public async Task<ConvertResult> RunAsync(Keys hotkeyKey)
     {
@@ -73,6 +76,10 @@ public sealed class SelectionConverter
 
             SendCtrlKey(VK_V);
             _last = (text, converted);
+            // Judge the language of what was actually pasted (also right when undoing a conversion).
+            if (SwitchLayout)
+                LayoutSwitcher.SwitchForeground(KeyboardConverter.Detect(converted) == KeyboardConverter.Direction.ArabicToEnglish
+                    ? LayoutSwitcher.LangArabic : LayoutSwitcher.LangEnglish);
             // Give the target app time to read the clipboard before we put the old content back.
             await Task.Delay(400);
 

@@ -13,14 +13,16 @@ public sealed class SettingsForm : Form
     private readonly TextBox _hotkeyBox = new();
     private readonly Label _hint = new();
     private readonly CheckBox _startupBox = new();
+    private readonly CheckBox _switchLayoutBox = new();
     private HotkeyModifiers _mods;
     private Keys _key;
 
     public HotkeyModifiers SelectedModifiers => _mods;
     public Keys SelectedKey => _key;
     public bool RunAtStartup => _startupBox.Checked;
+    public bool SwitchLayout => _switchLayoutBox.Checked;
 
-    public SettingsForm(HotkeyModifiers mods, Keys key, bool runAtStartup)
+    public SettingsForm(HotkeyModifiers mods, Keys key, bool runAtStartup, bool switchLayout)
     {
         _mods = mods;
         _key = key;
@@ -35,7 +37,7 @@ public sealed class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(380, 200);
+        ClientSize = new Size(380, 230);
 
         var label = new Label
         {
@@ -58,12 +60,16 @@ public sealed class SettingsForm : Form
         _startupBox.Text = "Start KeyFlip when I sign in to Windows";
         _startupBox.Checked = runAtStartup;
 
-        var save = new Button { Text = "Save", Left = 190, Top = 152, Width = 80, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Cancel", Left = 282, Top = 152, Width = 80, DialogResult = DialogResult.Cancel };
+        _switchLayoutBox.Left = 16; _switchLayoutBox.Top = 136; _switchLayoutBox.Width = 350;
+        _switchLayoutBox.Text = "Switch keyboard layout after converting";
+        _switchLayoutBox.Checked = switchLayout;
+
+        var save = new Button { Text = "Save", Left = 190, Top = 182, Width = 80, DialogResult = DialogResult.OK };
+        var cancel = new Button { Text = "Cancel", Left = 282, Top = 182, Width = 80, DialogResult = DialogResult.Cancel };
         AcceptButton = save;
         CancelButton = cancel;
 
-        Controls.AddRange(new Control[] { label, _hotkeyBox, _hint, _startupBox, save, cancel });
+        Controls.AddRange(new Control[] { label, _hotkeyBox, _hint, _startupBox, _switchLayoutBox, save, cancel });
         ResumeLayout(false);
     }
 
